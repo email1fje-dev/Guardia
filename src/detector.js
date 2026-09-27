@@ -1,8 +1,4 @@
-const { normalizeText, compactText } = require("./normalizer");
-
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&");
-}
+const { normalizeText, compactText, toConfusableRegex } = require("./normalizer");
 
 function prepareWords(words) {
   return [...new Set(
@@ -19,13 +15,13 @@ function findBadWord(text, words) {
   const prepared = prepareWords(words);
 
   for (const word of prepared) {
-    const compactWord = word.replace(/\\s+/g, "");
+    const compactWord = word.replace(/\s+/g, "");
     if (!compactWord) continue;
 
-    const spacedPattern = compactWord.split("").map(escapeRegex).join("[^\\p{L}\\p{N}]*");
-    const spacedRegex = new RegExp("(^|[^\\p{L}\\p{N}])" + spacedPattern + "($|[^\\p{L}\\p{N}])", "iu");
+    const pattern = toConfusableRegex(compactWord);
+    const regex = new RegExp("(^|[^\p{L}\p{N}])" + pattern + "($|[^\p{L}\p{N}])", "iu");
 
-    if (spacedRegex.test(normalized)) return word;
+    if (regex.test(text)) return word;
     if (compact.includes(compactWord)) return word;
   }
 
