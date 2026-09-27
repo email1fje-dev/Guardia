@@ -50,8 +50,8 @@ Use the repository as the source for a Railway service. Railway should run:
 npm start
 ```
 
-Do not commit your Discord token. Store it as a Railway variable.
+Do not commit your Discord token or Supabase secret key. Store them as Railway variables. Guardia uses the Supabase secret key only on the backend.
 
 ## Important
 
-The current runtime store uses a JSON file for the MVP. Railway's filesystem should not be treated as permanent storage for production configuration. A database can be added in the next stage.
+Guild settings, custom words, and violation counters are stored in Supabase. The Discord bot never stores secrets in GitHub.
