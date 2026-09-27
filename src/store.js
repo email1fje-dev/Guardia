@@ -1,3 +1,5 @@
+const fs = require("node:fs");
+const path = require("node:path");
 const { createClient } = require("@supabase/supabase-js");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -10,6 +12,10 @@ if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
   auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false }
 });
+
+const defaultData = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "..", "data", "default.json"), "utf8")
+);
 
 const state = {
   guilds: new Map(),
@@ -28,7 +34,32 @@ function guildDefaults() {
   };
 }
 
+async function seedDefaultWords() {
+  const words = [
+    ...(defaultData.english || []),
+    ...(defaultData.persian || []),
+    ...(defaultData.slang || [])
+  ].filter(word => typeof word === "string" && word.trim().length >= 2);
+
+  if (!words.length) return;
+
+  const rows = words.map(word => ({
+    guild_id: null,
+    word: word.trim().toLowerCase(),
+    category: "default",
+    enabled: true
+  }));
+
+  const { error } = await supabase
+    .from("guardia_words")
+    .upsert(rows, { onConflict: "guild_id,word" });
+
+  if (error) throw error;
+}
+
 async function load() {
+  await seedDefaultWords();
+
   const [{ data: guilds, error: guildError }, { data: words, error: wordError }, { data: violations, error: violationError }] =
     await Promise.all([
       supabase.from("guardia_guilds").select("*"),
@@ -57,10 +88,7 @@ async function load() {
 
   for (const row of words || []) {
     if (row.guild_id === null) state.defaultWords.push(row.word);
-    else {
-      const config = getGuild(row.guild_id);
-      config.customWords.push(row.word);
-    }
+    else getGuild(row.guild_id).customWords.push(row.word);
   }
 
   for (const row of violations || []) {
@@ -91,6 +119,7 @@ async function saveGuild(guildId) {
 async function addCustomWord(guildId, word) {
   const config = getGuild(guildId);
   const normalized = word.trim().toLowerCase();
+
   if (!config.customWords.includes(normalized)) config.customWords.push(normalized);
 
   const { error } = await supabase.from("guardia_words").upsert({
@@ -105,6 +134,7 @@ async function addCustomWord(guildId, word) {
 
 async function removeCustomWord(guildId, word) {
   const normalized = word.trim().toLowerCase();
+
   const { error } = await supabase
     .from("guardia_words")
     .delete()
@@ -112,6 +142,7 @@ async function removeCustomWord(guildId, word) {
     .eq("word", normalized);
 
   if (error) throw error;
+
   const config = getGuild(guildId);
   config.customWords = config.customWords.filter(w => w !== normalized);
 }
@@ -138,6 +169,7 @@ async function addViolation(guildId, userId) {
 
 async function resetViolations(guildId, userId) {
   state.violations.delete(`${guildId}:${userId}`);
+
   const { error } = await supabase
     .from("guardia_violations")
     .delete()
