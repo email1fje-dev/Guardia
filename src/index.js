@@ -11,7 +11,7 @@ const {
   SlashCommandBuilder
 } = require("discord.js");
 
-const { findBadWord } = require("./detector");
+const { findBadWord, censorText } = require("./detector");
 const store = require("./store");
 
 if (!process.env.DISCORD_TOKEN) throw new Error("Missing DISCORD_TOKEN.");
@@ -200,10 +200,22 @@ client.on("messageCreate", async message => {
     const violation = await store.addViolation(message.guild.id, message.author.id);
 
     if (config.deleteMessages && message.deletable) {
+      const censored = censorText(
+        message.content,
+        store.getAllWords(message.guild.id)
+      );
+
       await message.delete().catch(() => {});
+
+      if (censored && censored !== message.content) {
+        await message.channel.send({
+          content: "🔒 <@" + message.author.id + ">: " + censored,
+          allowedMentions: { users: [] }
+        }).catch(() => {});
+      }
     }
 
-    let action = "Message deleted";
+    let action = "Message censored + original deleted";
 
     if (violation >= config.warningLimit && message.member?.moderatable) {
       const duration = config.timeoutMinutes * 60 * 1000;
